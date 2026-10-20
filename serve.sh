@@ -30,9 +30,11 @@ class H(http.server.SimpleHTTPRequestHandler):
             patch = json.loads(self.rfile.read(n) or b"{}")
             with open(DATA, "r", encoding="utf-8") as f:
                 doc = json.load(f)
-            # Only the fields the card is allowed to own. Everything else in travel.json is
-            # hers to edit by hand and must survive untouched.
-            for key in ("stateNotes",):
+            # Only the keys the app is allowed to own. Everything else in travel.json is hers
+            # to edit by hand and must survive untouched.
+            for key in ("stateNotes", "visits", "trips", "routesLogged",
+                        "fourteeners", "parksVisited", "coTowns", "cities",
+                        "statesVisited", "countriesVisited", "updated"):
                 if key in patch:
                     doc[key] = patch[key]
             tmp = DATA + ".tmp"

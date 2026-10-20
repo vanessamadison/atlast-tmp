@@ -84,6 +84,118 @@ body{margin:0;background:var(--bg);color:var(--ink);
 #tip span{display:block;margin-top:3px;font:10px/1.4 var(--mono);letter-spacing:.06em;
  color:var(--mut);text-transform:lowercase}
 
+/* ── the list panel ─────────────────────────────────────────────────────
+   Beside the map, not under it. AllTrails' map view is criticised for having no list: tap a
+   pin, a card appears at the bottom, tap again to open — two taps per candidate and no way to
+   compare ten of them, which is what choosing actually requires. */
+#panel{position:fixed;top:0;left:0;bottom:0;width:min(340px,86vw);z-index:12;
+ display:flex;flex-direction:column;
+ background:linear-gradient(90deg,rgba(7,9,7,.97),rgba(7,9,7,.88));
+ border-right:1px solid var(--line);backdrop-filter:blur(14px);
+ transform:translateX(-101%);transition:transform .22s cubic-bezier(.32,.72,0,1)}
+#panel.open{transform:none}
+#paneltog{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:13;
+ background:rgba(7,9,7,.9);border:1px solid var(--line);border-left:none;
+ border-radius:0 6px 6px 0;color:var(--mut);cursor:pointer;
+ padding:16px 5px;font:600 9px var(--mono);letter-spacing:.16em;writing-mode:vertical-rl;
+ text-transform:uppercase}
+#paneltog:hover{color:var(--ink);background:rgba(168,204,112,.12)}
+#panel.open + #paneltog{left:min(340px,86vw)}
+
+.ph{display:flex;align-items:center;justify-content:space-between;gap:8px;
+ padding:calc(14px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--line)}
+.phcount{font:9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--a1)}
+.phtog{background:none;border:1px solid var(--line);border-radius:20px;color:var(--mut);
+ font:600 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:5px 10px;cursor:pointer}
+.phtog.on{color:var(--gold);border-color:rgba(227,199,101,.4);background:rgba(227,199,101,.1)}
+
+.psearch{padding:10px 14px 0}
+.psearch input{width:100%;background:rgba(238,242,234,.05);border:1px solid var(--line);
+ border-radius:4px;color:var(--ink);padding:8px 10px;font:13px ui-sans-serif,system-ui,sans-serif}
+.psearch input:focus{outline:none;border-color:rgba(168,204,112,.45)}
+
+.pchips{display:flex;flex-wrap:wrap;gap:4px;padding:10px 14px}
+.pchip{display:inline-flex;align-items:center;gap:5px;background:rgba(238,242,234,.03);
+ border:1px solid var(--line);border-radius:20px;color:var(--mut);cursor:pointer;
+ padding:5px 9px;font:10.5px ui-sans-serif,system-ui,sans-serif;transition:.12s}
+.pchip i{font-style:normal;opacity:.65;font-size:10px}
+.pchip:hover{color:var(--ink);border-color:rgba(238,242,234,.22)}
+.pchip.on{color:var(--ink);background:rgba(168,204,112,.16);border-color:rgba(168,204,112,.4)}
+.pchip.on i{opacity:1;color:var(--a1)}
+
+.pfacets{display:none;padding:4px 14px 12px;border-bottom:1px solid var(--line2)}
+.pfacets.on{display:block}
+.pfacet{display:grid;grid-template-columns:86px 1fr 70px;align-items:center;gap:8px;margin-bottom:8px}
+.pfacet span{font:8.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.pfacet b{font:9px var(--mono);letter-spacing:.08em;color:var(--mut);text-align:right}
+.pfacet input[type=range]{width:100%;accent-color:#a8cc70}
+.pshow{display:flex;gap:4px;margin:10px 0 8px}
+.pseg{flex:1;background:rgba(238,242,234,.03);border:1px solid var(--line);color:var(--mut);
+ border-radius:4px;padding:6px;font:600 9px var(--mono);letter-spacing:.1em;
+ text-transform:uppercase;cursor:pointer}
+.pseg.on{color:var(--ink);background:rgba(168,204,112,.16);border-color:rgba(168,204,112,.38)}
+.pclear{width:100%;background:none;border:none;color:var(--a2);font:10px var(--mono);
+ letter-spacing:.08em;cursor:pointer;text-decoration:underline;padding:4px}
+
+.pnext{padding:10px 14px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);
+ background:rgba(168,204,112,.045)}
+.pnexth{font:8.5px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--a1);
+ margin-bottom:7px}
+.pnextr{display:flex;flex-direction:column;gap:2px;padding:4px 0;border-radius:3px}
+.pnextr.clickable{cursor:pointer}
+.pnextr.clickable:hover{background:rgba(168,204,112,.1)}
+.pnextwhy{font:11.5px/1.4 ui-sans-serif,system-ui,sans-serif;color:var(--mut)}
+.pnextt{font:9px var(--mono);letter-spacing:.07em;color:var(--gold)}
+
+.plist{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 24px}
+.plist::-webkit-scrollbar{width:7px}
+.plist::-webkit-scrollbar-thumb{background:rgba(238,242,234,.12);border-radius:7px}
+.pempty{margin:16px 14px;font:11.5px/1.5 ui-sans-serif,system-ui,sans-serif;color:var(--dim)}
+
+.prow2{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer}
+.prow2:hover{background:rgba(168,204,112,.06)}
+.prow2.done{opacity:.55}
+.prmain{flex:1;min-width:0}
+.prtitle{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.prname{font:500 12.5px ui-sans-serif,system-ui,sans-serif;color:var(--ink)}
+.prmeta{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;align-items:center}
+.prbit{font:8.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.prbit.warn{color:var(--warn)}
+.prbit.dim{opacity:.6}
+.prwhy{margin:5px 0 0;font:11px/1.45 ui-sans-serif,system-ui,sans-serif;color:var(--dim);
+ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.practs{display:flex;align-items:flex-start}
+.prdone{background:rgba(168,204,112,.1);border:1px solid rgba(168,204,112,.3);color:var(--a1);
+ width:26px;height:26px;border-radius:4px;cursor:pointer;font-size:12px;line-height:1;flex:none}
+.prdone:hover{background:rgba(168,204,112,.25)}
+
+/* provenance — a surveyed coordinate and a blog recommendation must not look the same */
+.prov{font:8px var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:2px 5px;
+ border-radius:3px;border:1px solid transparent;cursor:help}
+.prov.fact{color:var(--a1);border-color:rgba(168,204,112,.3);background:rgba(168,204,112,.08)}
+.prov.mine{color:var(--a2);border-color:rgba(134,168,196,.3);background:rgba(134,168,196,.08)}
+.prov.edit{color:var(--gold);border-color:rgba(227,199,101,.28);background:rgba(227,199,101,.07)}
+
+/* difficulty as two dimensions, because class and consequence are not the same thing */
+.diffc{display:inline-flex;align-items:center;gap:3px;font:8.5px var(--mono);
+ letter-spacing:.06em;text-transform:uppercase;color:var(--mut);cursor:help}
+.diffc b{font-weight:600}
+.diffc .exp{font-style:normal;letter-spacing:1px}
+.diffc .exp.e1{color:#9ab87a}
+.diffc .exp.e2{color:var(--warn)}
+.diffc .exp.e3{color:#e06b6b}
+
+@media (max-width:820px){
+ #panel{width:100vw;transform:translateY(-101%)}
+ #panel.open{transform:none}
+ #panel.open + #paneltog{left:0;top:auto;bottom:calc(66px + env(safe-area-inset-bottom));
+  transform:none;writing-mode:horizontal-tb;border-radius:6px;border-left:1px solid var(--line);
+  padding:8px 12px}
+ #paneltog{top:auto;bottom:calc(66px + env(safe-area-inset-bottom));transform:none;
+  writing-mode:horizontal-tb;border-radius:0 6px 6px 0;padding:8px 12px}
+ .psearch input,.prname{font-size:16px}
+}
+
 /* ── the card ───────────────────────────────────────────────────────── */
 #cardhost{position:fixed;top:0;right:0;bottom:0;width:min(430px,100vw);z-index:15;
  overflow-y:auto;overscroll-behavior:contain;
@@ -256,7 +368,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
   <h1><span class="atl">ATLAS</span><span class="t">T</span></h1>
   <nav id="back"></nav>
   <span class="pill on">verified in person</span>
-  <span class="pill" id="build">at-r9.1</span>
+  <span class="pill" id="build">at-r10.0</span>
   <span class="pill" id="src">loading</span>
   <span id="sub">loading</span>
 </div>
@@ -271,6 +383,8 @@ body{margin:0;background:var(--bg);color:var(--ink);
 <div id="tip"></div>
 <div id="hint"></div>
 <div id="err"></div>
+<aside id="panel"></aside>
+<button id="paneltog">Places</button>
 <div id="cardhost"></div>
 <div id="wipe"></div>
 <div id="load">at last</div>
@@ -279,5 +393,5 @@ body{margin:0;background:var(--bg);color:var(--ink);
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js",
 "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
 </script>
-<script type="module" src="./app.js?v=13"></script>
+<script type="module" src="./app.js?v=14"></script>
 </body></html>

@@ -28,7 +28,7 @@
 // NOT BUILT, on purpose: streaks, speed leaderboards, league tiers, and any badge whose
 // requirement is "do the thing N times".
 
-import { INTERESTS, INTEREST_KEYS, CLASSES } from "./taxonomy.js?v=13";
+import { INTERESTS, INTEREST_KEYS, CLASSES } from "./taxonomy.js?v=14";
 
 /* ── percent thresholds, Wandrer-style ───────────────────────────────────── */
 export const THRESHOLDS = [10, 25, 50, 75, 90, 99, 100];

@@ -9,9 +9,9 @@
 // an elevation sampler, and returns meshes.
 
 import * as THREE from "three";
-import { decimate } from "./geo.js?v=13";
-import { C, ramp } from "./style.js?v=13";
-import { M_TO_FT } from "./dem.js?v=13";
+import { decimate } from "./geo.js?v=14";
+import { C, ramp } from "./style.js?v=14";
+import { M_TO_FT } from "./dem.js?v=14";
 
 /**
  * A projector for one region.

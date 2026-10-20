@@ -20,12 +20,12 @@
 // verified. There is no number in the curated layer I could have got wrong from memory, and
 // that property is worth the indirection this file exists to unwind.
 
-import { PARKS } from "./parks.js?v=13";
-import { GEMS } from "./gems.js?v=13";
-import { DISCOVERED } from "./discovered.js?v=13";
-import { ROUTES, PERMIT_TIERS } from "./routes.js?v=13";
-import { INTEREST_KEYS } from "./taxonomy.js?v=13";
-import { STATE } from "./states.js?v=13";
+import { PARKS } from "./parks.js?v=14";
+import { GEMS } from "./gems.js?v=14";
+import { DISCOVERED } from "./discovered.js?v=14";
+import { ROUTES, PERMIT_TIERS } from "./routes.js?v=14";
+import { INTEREST_KEYS } from "./taxonomy.js?v=14";
+import { STATE } from "./states.js?v=14";
 
 /* ── park name normalisation ──────────────────────────────────────────────
    Sources write "Zion National Park"; parks.js says "Zion". A research pass that returns the
@@ -264,6 +264,45 @@ export function buildPlaces(DATA, { resolveOSM = null } = {}) {
     });
   }
 
+  /* --- dedupe across layers ----------------------------------------------
+     The same mountain arrives twice: travel.json calls it "Mt. Sneffels" and the curated layer
+     calls it "Mount Sneffels". Both are correct and the list shows them side by side, which
+     looks like sloppy data and undermines the provenance claim the whole index rests on.
+
+     Merge by normalised name, keeping the entry with the best provenance as the base — her own
+     verified record beats a survey beats editorial — then fold the editorial value (the `why`,
+     the source links) onto it. The result is one pin with the good coordinates AND the reason
+     anyone should care, which is better than either layer alone. */
+  const SRC_RANK = { "travel.json": 4, parks: 3, osm: 2, curated: 1, research: 0 };
+  const NOISE_WORDS = /\b(mount|mt|the|via|trail|route|loop)\b/g;
+  const dedupeKey = p =>
+    KEY(String(p.name).toLowerCase().replace(NOISE_WORDS, " ")) + "|" + (p.region || "");
+
+  const merged = new Map();
+  for (const p of places) {
+    const k = dedupeKey(p);
+    const seen = merged.get(k);
+    if (!seen) { merged.set(k, p); continue; }
+    const better = (SRC_RANK[p.src] ?? -1) > (SRC_RANK[seen.src] ?? -1) ? p : seen;
+    const other = better === p ? seen : p;
+    // Keep the better coordinates and identity; inherit the editorial payload.
+    better.why = better.why || other.why;
+    better.links = (better.links?.length ? better.links : other.links) || [];
+    better.interests = [...new Set([...(better.interests || []), ...(other.interests || [])])];
+    if (better.cls == null && other.cls != null) {
+      better.cls = other.cls;
+      better.inferred = [...new Set([...(better.inferred || []), "cls"])];
+    }
+    if (better.exposure == null && other.exposure != null) better.exposure = other.exposure;
+    better.visited = better.visited || other.visited;
+    better.mergedFrom = [...(better.mergedFrom || []), other.src];
+    merged.set(k, better);
+  }
+  const deduped = [...merged.values()];
+  const dropped = places.length - deduped.length;
+  places.length = 0;
+  places.push(...deduped);
+
   /* --- indexes the UI actually asks for ---------------------------------- */
   const byRegion = new Map();
   for (const p of places) {
@@ -279,7 +318,7 @@ export function buildPlaces(DATA, { resolveOSM = null } = {}) {
   }
 
   const index = {
-    places, routes, unresolved, byRegion, routesByRegion,
+    places, routes, unresolved, byRegion, routesByRegion, dropped,
     visitedParks, visitedStates, visitedCountries, suggested,
     resolveAnchor, canonPark,
 

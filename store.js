@@ -13,6 +13,7 @@
 // priority is 0–5. 0 means unset.
 
 const LS_KEY = "atlast.stateNotes.v1";
+const LS_PATCH = "atlast.travel.v1";
 const LS_MAPKEY = "atlast.googleMapsKey.v1";
 
 export const store = {
@@ -57,6 +58,31 @@ export const store = {
       if (!r.ok) { this.mode = "cached"; return "cached"; }
       this.mode = "live";
       return "live";
+    } catch {
+      this.probed = true; this.mode = "cached";
+      return "cached";
+    }
+  },
+
+  /**
+   * Write arbitrary top-level travel.json keys — what the capture system produces.
+   * Same two tiers as the notes: the local writer if serve.sh is running, otherwise a
+   * localStorage overlay plus the download button, and it always says which.
+   */
+  async savePatch(patch) {
+    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v != null));
+    if (!Object.keys(clean).length) return this.mode;
+    Object.assign(this.base, clean);
+    try { localStorage.setItem(LS_PATCH, JSON.stringify(this.base)); } catch {}
+    try {
+      const r = await fetch("./__save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clean),
+      });
+      this.probed = true;
+      this.mode = r.ok ? "live" : "cached";
+      return this.mode;
     } catch {
       this.probed = true; this.mode = "cached";
       return "cached";

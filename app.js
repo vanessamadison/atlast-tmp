@@ -1,6 +1,6 @@
 // ATLAST — coverage map. Scene, views, drill-down, interaction.
 //
-// BUILD at-r9.1
+// BUILD at-r10.0
 //
 // Three views and one drill-down. USA and Globe are overviews; clicking anything in either
 // pushes into a region view, which is the Colorado treatment applied generically — extruded
@@ -15,20 +15,24 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PARKS } from "./parks.js?v=13";
-import { elev } from "./terrain.js?v=13";
+import { PARKS } from "./parks.js?v=14";
+import { elev } from "./terrain.js?v=14";
 import {
   decodeTopo, albers, laea, lonLatToSphere, bboxOf, inside,
   lonLatBBox, lonLatBBoxUnwrapped, unwrapFeature,
-} from "./geo.js?v=13";
-import { S, C, TINT, ramp, reliefUnits } from "./style.js?v=13";
-import { STATE, ABBR, CONTINENT, canonCountry } from "./states.js?v=13";
-import { store } from "./store.js?v=13";
-import { loadDEM, loadDEMProgressive, pickZoom, DEM_SOURCE_NOTE } from "./dem.js?v=13";
-import { projectorFor, slabGroup, borderLine, terrainMesh, sampler } from "./region.js?v=13";
-import { mountCard, openState, openCountry, closeCard } from "./card.js?v=13";
+} from "./geo.js?v=14";
+import { S, C, TINT, ramp, reliefUnits } from "./style.js?v=14";
+import { STATE, ABBR, CONTINENT, canonCountry } from "./states.js?v=14";
+import { store } from "./store.js?v=14";
+import { loadDEM, loadDEMProgressive, pickZoom, DEM_SOURCE_NOTE } from "./dem.js?v=14";
+import { projectorFor, slabGroup, borderLine, terrainMesh, sampler } from "./region.js?v=14";
+import { mountCard, openState, openCountry, closeCard } from "./card.js?v=14";
+import { buildPlaces, auditPlaces } from "./places.js?v=14";
+import { mountPanel } from "./panel.js?v=14";
+import { evaluate } from "./progress.js?v=14";
+import { markDone, suggestNext } from "./capture.js?v=14";
 
-export const BUILD = "at-r9.1";
+export const BUILD = "at-r10.0";
 
 const QS = new URLSearchParams(location.search);
 
@@ -79,7 +83,9 @@ const rimLight = new THREE.DirectionalLight(0x9fd0ff, 0.35);
 rimLight.position.set(80, 40, -70);
 scene.add(rimLight);
 
-let DATA, STATES, WORLD, WORLD50;
+let DATA, STATES, WORLD, WORLD50, INDEX = null, PANEL = null, PROGRESS = null;
+let poiFilter = null;      // the rows the panel last produced, or null for "everything"
+let poiRootRef = null;     // the live POI group, so a filter change repaints only it
 const group = new THREE.Group();
 scene.add(group);
 let hoverables = [], pulses = [];
@@ -516,6 +522,8 @@ async function buildRegion(spec) {
   }));
   const terrRoot = new THREE.Group(); group.add(terrRoot);
   const markRoot = new THREE.Group(); group.add(markRoot);
+  const poiRoot = new THREE.Group(); group.add(poiRoot);
+  poiRootRef = poiRoot;
 
   const visP = new Set(DATA.parksVisited);
   const sug = new Map((DATA.suggestions || []).map(x => [x.park, x.why]));
@@ -525,6 +533,11 @@ async function buildRegion(spec) {
   const decorate = ({ yAt }) => {
     emptyGroup(markRoot);
     markRoot.add(borderLine(uf, P, yAt, been ? C.edgeOn : C.edgeOff, 0.75));
+
+    // Every region gets its POI layer, not just Colorado. regionCtx is what lets a row in the
+    // list panel move the camera to a pin.
+    regionCtx = { P, yAt, code, country };
+    buildPOIs(poiRoot, P, yAt, poiFilter, { scale: 0.9 });
 
     for (const rt of (DATA.routes || [])) {
       const p = rt.pts.filter(([la, lo]) => inRegion(lo, la))
@@ -633,6 +646,7 @@ async function buildRegion(spec) {
     },
   });
 
+  PANEL?.setRegion(code || null);
   frame(new THREE.Vector3(0, 0.62, 0.78), 1.02);
 
   if (isCO) {
@@ -838,6 +852,78 @@ async function buildGlobe() {
     subEl.textContent = "the world · 195 countries";
   })();
 }
+
+/* ── POI layer ────────────────────────────────────────────────────────────
+   The 188 researched and curated places, plus the 55 routes, drawn into their own group so a
+   filter change rebuilds only this and never touches the terrain underneath it.
+
+   Scale, in kilometres, because that is the rule: on a region view 100 units spans the region's
+   long axis, so Colorado is ~6.1 km per unit. A POI dot at S.DOT*0.55 is 0.11 units ≈ 0.67 km,
+   which is a place rather than a county. */
+const POI_COLOUR = {
+  summit: 0xf2f6ee, scramble: 0xe08b6b, climb: 0xd96b6b, trail: 0xa8cc70,
+  water: 0x4f93b5, fish: 0x6fc0d0, view: 0xe3c765, paddle: 0x5fb0c7,
+  snow: 0xcfe6f2, bike: 0xc08ad0, camp: 0x9ab87a, geology: 0xc9a06b,
+  dark: 0x8f8fd0, food: 0xe0a06b, town: 0x86a8c4, history: 0xb0a089,
+};
+function poiColour(p) {
+  for (const i of p.interests || []) if (POI_COLOUR[i]) return POI_COLOUR[i];
+  return C.miss;
+}
+
+function buildPOIs(root, P, yAt, rows, { scale = 1 } = {}) {
+  emptyGroup(root);
+  if (!rows) return;
+
+  for (const p of rows) {
+    // Routes draw as lines through their resolved waypoints; anything with fewer than two
+    // located waypoints has nothing to draw and is left to the list panel.
+    if (p.waypoints) {
+      const pts = p.waypoints.filter(w => w.lat != null)
+        .map(w => { const [X, Z] = P.world(w.lon, w.lat); return new THREE.Vector3(X, yAt(w.lon, w.lat) + 0.18, Z); });
+      const t = tube(pts, p.logged ? C.park : C.next, S.ROAD * 0.7 * scale, p.logged ? 0.85 : 0.5);
+      if (t) {
+        hoverable(t, p.name,
+          [p.kind, p.nights ? p.nights + " nights" : null, p.permitTier !== "none" ? p.permitTier : null,
+            p.logged ? "logged" : null].filter(Boolean).join(" · "),
+          () => PANEL && focusPlace(p));
+        root.add(t);
+      }
+      continue;
+    }
+
+    if (p.lat == null) continue;
+    const [X, Z] = P.world(p.lon, p.lat);
+    const y = yAt(p.lon, p.lat);
+    const col = p.visited ? C.park : poiColour(p);
+    const d = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({
+      color: col, transparent: !p.visited, opacity: p.visited ? 1 : 0.78 }));
+    d.scale.setScalar(S.DOT * (p.visited ? 0.75 : 0.55) * scale);
+    d.position.set(X, y + 0.1 * scale, Z);
+    hoverable(d, p.name,
+      [p.cls != null ? "class " + p.cls : null,
+        p.visited ? "done" : null,
+        p.src === "research" || p.src === "curated" ? "editorial — check source" : null,
+      ].filter(Boolean).join(" · ") || p.kind,
+      () => focusPlace(p));
+    root.add(d);
+  }
+  pruneHoverables();
+}
+
+/** Clicking a row or a pin: move the camera to it and open its card. */
+function focusPlace(p) {
+  if (p.lat == null) return;
+  const r = regionCtx;
+  if (!r) return;
+  const [X, Z] = r.P.world(p.lon, p.lat);
+  const y = r.yAt ? r.yAt(p.lon, p.lat) : 0;
+  const target = new THREE.Vector3(X, y, Z);
+  const dist = Math.max(12, framedDist * 0.28);
+  ease(target.clone().add(new THREE.Vector3(0, dist * 0.72, dist * 0.69)), target, 520);
+}
+
+let regionCtx = null;   // { P, yAt } for the region currently on screen
 
 /* ── chrome ───────────────────────────────────────────────────────────── */
 const stats = r => document.getElementById("stats").innerHTML =
@@ -1101,6 +1187,8 @@ function go(m) {
   closeCard();
   setCrumbs([]);
   popArmed = false;
+  regionCtx = null;
+  PANEL?.setRegion(null);
   if (m === "co") { drillState("CO", "us"); return; }
   nav = { view: m };
   modeButtons(m);
@@ -1170,6 +1258,49 @@ document.querySelectorAll("#modes button")
     store.init(DATA);
     buildIndexes();
     warnUnmatchedCountries();
+
+    // The merged index over parks, her own record, curated gems, research and routes.
+    INDEX = buildPlaces(DATA);
+    PROGRESS = evaluate(DATA, INDEX);
+    const audit = auditPlaces(INDEX);
+    const errs = audit.filter(a => a.level === "error");
+    if (errs.length) console.error("[atlast] place index errors:", errs);
+    console.log("[atlast] index:", INDEX.places.length, "places,", INDEX.routes.length, "routes,",
+      INDEX.unresolved.length, "awaiting coordinates ·", PROGRESS.earned.length, "badges earned");
+
+    PANEL = mountPanel(document.getElementById("panel"), {
+      index: INDEX,
+      suggestions: suggestNext(DATA, INDEX, PROGRESS),
+      // A filter change repaints only the POI group; terrain and markers are untouched.
+      onFilter: rows => {
+        poiFilter = rows;
+        if (regionCtx && poiRootRef) buildPOIs(poiRootRef, regionCtx.P, regionCtx.yAt, rows, { scale: 0.9 });
+      },
+      onFocus: p => focusPlace(p),
+      // One tap, no date — Letterboxd's eye. The dated entry is a separate action.
+      onLog: async p => {
+        const patch = markDone(DATA, p);
+        Object.assign(DATA, Object.fromEntries(Object.entries(patch).filter(([, v]) => v != null)));
+        INDEX = buildPlaces(DATA);
+        PROGRESS = evaluate(DATA, INDEX);
+        const tier = await store.savePatch(patch);
+        PANEL.apply();
+
+    // The panel slides out of the way; it is a tool, not furniture.
+    const panelEl = document.getElementById("panel");
+    document.getElementById("paneltog").addEventListener("click", () => {
+      panelEl.classList.toggle("open");
+      reframe();
+    });
+        // Repaint the pins in place rather than rebuilding the region — the terrain is
+        // expensive and has not changed just because one dot turned green.
+        if (regionCtx && poiRootRef) buildPOIs(poiRootRef, regionCtx.P, regionCtx.yAt, poiFilter, { scale: 0.9 });
+        subEl.textContent = tier === "live"
+          ? `logged ${p.name} → travel.json`
+          : `logged ${p.name} — cached in this browser`;
+      },
+    });
+    PANEL.apply();
     console.log("[atlast]", BUILD, "states", STATES.length, "countries", WORLD.length,
       "cities placed", cityState.size);
     go("us");

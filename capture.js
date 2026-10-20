@@ -27,7 +27,7 @@
 // is written with `anchor: "osm:<name>"` and resolved from OpenStreetMap later. A visit with a
 // guessed lat/lon is worse than a visit with none, because the map then lies with confidence.
 
-import { INTEREST_KEYS } from "./taxonomy.js?v=13";
+import { INTEREST_KEYS } from "./taxonomy.js?v=14";
 
 const KEY = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
 
